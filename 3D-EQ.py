@@ -13,7 +13,7 @@ CESIUM_ION_ACCESS_TOKEN = os.environ.get('CESIUM_ION_ACCESS_TOKEN')
 if not CESIUM_ION_ACCESS_TOKEN:
     raise ValueError("CESIUM_ION_ACCESS_TOKEN environment variable is not set.")
 
-# HTML template with Cesium-based heatmap functionality
+# HTML template with Cesium-based heatmap functionality using PointPrimitives
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -351,16 +351,15 @@ HTML_TEMPLATE = """
 
         let heatmapEnabled = false;
         let earthquakes = [];
-        let heatmapLayer = null;
-        let updateHeatmapCallback = null;
+        let heatmapPoints = [];
 
         // Function to get color based on magnitude
         function getColor(magnitude) {
-            if (magnitude >= 5.0) return Cesium.Color.fromCssColorString('#d7191c').withAlpha(0.6);
-            if (magnitude >= 4.0) return Cesium.Color.fromCssColorString('#fdae61').withAlpha(0.6);
-            if (magnitude >= 3.0) return Cesium.Color.fromCssColorString('#ffffbf').withAlpha(0.6);
-            if (magnitude >= 2.0) return Cesium.Color.fromCssColorString('#a6d96a').withAlpha(0.6);
-            return Cesium.Color.fromCssColorString('#1a9641').withAlpha(0.6);
+            if (magnitude >= 5.0) return Cesium.Color.RED.withAlpha(0.6);
+            if (magnitude >= 4.0) return Cesium.Color.ORANGE.withAlpha(0.6);
+            if (magnitude >= 3.0) return Cesium.Color.YELLOW.withAlpha(0.6);
+            if (magnitude >= 2.0) return Cesium.Color.GREEN.withAlpha(0.6);
+            return Cesium.Color.BLUE.withAlpha(0.6);
         }
 
         // Fetch earthquakes from USGS API based on selected date range
@@ -380,11 +379,7 @@ HTML_TEMPLATE = """
                     if (!data.features) {
                         throw new Error("Invalid earthquake data format.");
                     }
-                    earthquakes = data.features.sort((a, b) => {
-                        const magA = a.properties.mag || 0;
-                        const magB = b.properties.mag || 0;
-                        return magB - magA;
-                    });
+                    earthquakes = data.features.sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
                     updateEarthquakeData();
                 })
                 .catch(error => {
@@ -416,12 +411,12 @@ HTML_TEMPLATE = """
 
             // Remove existing entities
             viewer.entities.removeAll();
+            heatmapPoints = [];
 
             if (heatmapEnabled) {
                 addHeatmap();
             } else {
                 addEarthquakePoints();
-                // Only zoom to entities if heatmap is disabled
                 if (earthquakes.length > 0) {
                     viewer.zoomTo(viewer.entities).otherwise(() => {
                         console.log('Zoom failed');
@@ -439,7 +434,7 @@ HTML_TEMPLATE = """
                 viewer.entities.add({
                     position: Cesium.Cartesian3.fromDegrees(lon, lat),
                     point: {
-                        pixelSize: Math.max(6 + mag * 2, 6), // Ensure minimum size
+                        pixelSize: Math.max(6 + mag * 2, 6),
                         color: getColor(mag),
                         outlineColor: Cesium.Color.BLACK,
                         outlineWidth: 1
@@ -454,95 +449,22 @@ HTML_TEMPLATE = """
             });
         }
 
-        // Add heatmap using Cesium's PostRender event
+        // Add heatmap using PointPrimitives
         function addHeatmap() {
-            if (heatmapLayer) {
-                // Heatmap already exists
-                return;
-            }
+            const pointCollection = new Cesium.PointPrimitiveCollection();
+            viewer.scene.primitives.add(pointCollection);
 
-            heatmapLayer = document.createElement('canvas');
-            heatmapLayer.id = 'heatmapCanvas';
-            heatmapLayer.style.position = 'absolute';
-            heatmapLayer.style.top = '0';
-            heatmapLayer.style.left = '0';
-            heatmapLayer.style.width = '100%';
-            heatmapLayer.style.height = '100%';
-            heatmapLayer.style.pointerEvents = 'none';
-            heatmapLayer.width = window.innerWidth;
-            heatmapLayer.height = window.innerHeight;
-            heatmapLayer.style.zIndex = '2';
-            document.body.appendChild(heatmapLayer);
-            const ctx = heatmapLayer.getContext('2d');
-
-            // Handle window resize
-            window.addEventListener('resize', () => {
-                if (heatmapLayer) {
-                    heatmapLayer.width = window.innerWidth;
-                    heatmapLayer.height = window.innerHeight;
-                    renderHeatmap();
-                }
+            earthquakes.forEach(eq => {
+                const [lon, lat, depth] = eq.geometry.coordinates;
+                const mag = eq.properties.mag || 0;
+                pointCollection.add({
+                    position: Cesium.Cartesian3.fromDegrees(lon, lat),
+                    color: getColor(mag),
+                    pixelSize: Math.max(10 + mag * 3, 10)
+                });
             });
 
-            function renderHeatmap() {
-                ctx.clearRect(0, 0, heatmapLayer.width, heatmapLayer.height);
-                ctx.globalAlpha = 0.6;
-
-                earthquakes.forEach(eq => {
-                    const [lon, lat, mag] = eq.geometry.coordinates;
-                    const cartesian = Cesium.Cartesian3.fromDegrees(lon, lat);
-                    const windowPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
-                    if (Cesium.defined(windowPosition)) {
-                        const x = windowPosition.x;
-                        const y = windowPosition.y;
-                        const radius = Math.max(mag * 2, 2); // Ensure radius is at least 2
-                        if (radius <= 0 || isNaN(radius)) {
-                            // Skip if radius is invalid
-                            return;
-                        }
-
-                        const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-                        const color = getHeatmapColor(mag);
-                        gradient.addColorStop(0, color);
-                        gradient.addColorStop(1, 'rgba(0,0,0,0)');
-                        ctx.fillStyle = gradient;
-                        ctx.beginPath();
-                        ctx.arc(x, y, radius, 0, 2 * Math.PI);
-                        ctx.fill();
-                    }
-                });
-            }
-
-            // Debounce rendering to improve performance
-            let renderTimeout;
-            updateHeatmapCallback = () => {
-                if (renderTimeout) clearTimeout(renderTimeout);
-                renderTimeout = setTimeout(() => {
-                    renderHeatmap();
-                }, 100);
-            };
-
-            viewer.scene.postRender.addEventListener(updateHeatmapCallback);
-            renderHeatmap();
-        }
-
-        // Remove heatmap
-        function removeHeatmap() {
-            if (heatmapLayer) {
-                viewer.scene.postRender.removeEventListener(updateHeatmapCallback);
-                heatmapLayer.remove();
-                heatmapLayer = null;
-                updateHeatmapCallback = null;
-            }
-        }
-
-        // Generate color based on magnitude for heatmap
-        function getHeatmapColor(magnitude) {
-            if (magnitude >= 5.0) return 'rgba(215,25,28,1)';   // Red
-            if (magnitude >= 4.0) return 'rgba(253,174,97,1)';  // Orange
-            if (magnitude >= 3.0) return 'rgba(255,251,191,1)'; // Yellow
-            if (magnitude >= 2.0) return 'rgba(166,217,106,1)'; // Light Green
-            return 'rgba(26,150,65,1)';                        // Dark Green
+            heatmapPoints.push(pointCollection);
         }
 
         // Fly to a specific earthquake location
@@ -695,6 +617,14 @@ HTML_TEMPLATE = """
             viewer.entities.removeAll();
         }
 
+        // Remove heatmap
+        function removeHeatmap() {
+            heatmapPoints.forEach(pointCollection => {
+                viewer.scene.primitives.remove(pointCollection);
+            });
+            heatmapPoints = [];
+        }
+
         // Fetch initial earthquake data
         fetchEarthquakes(7);
     </script>
@@ -709,3 +639,5 @@ def index():
         cesium_token=CESIUM_ION_ACCESS_TOKEN
     )
 
+if __name__ == '__main__':
+    app.run(debug=True)
