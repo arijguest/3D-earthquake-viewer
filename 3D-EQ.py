@@ -568,7 +568,7 @@ HTML_TEMPLATE = """
                     if (data.length) {
                         const { lon, lat } = data[0];
                         viewer.camera.flyTo({
-                            destination: Cesium.Cartesian3.fromDegrees(parseFloat(lon), parseFloat(lat), 400000),
+                            destination: Cesium.Cartesian3.fromDegrees(parseFloat(lon), parseFloat(lat), 2000000),
                             duration: 2,
                             orientation: { pitch: Cesium.Math.toRadians(270) }
                         });
