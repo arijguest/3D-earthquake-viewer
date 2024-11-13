@@ -1,1 +1,1 @@
-web: python 3D-EQ.py
+web: gunicorn 3D-EQ:app
