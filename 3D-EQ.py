@@ -521,7 +521,7 @@ HTML_TEMPLATE = """
             viewer.camera.flyTo({
                 destination: Cesium.Cartesian3.fromDegrees(lon, lat, 200000),
                 duration: 2,
-                orientation: { pitch: Cesium.Math.toRadians(90) }
+                orientation: { pitch: Cesium.Math.toRadians(270) }
             });
         }
 
