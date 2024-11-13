@@ -22,17 +22,291 @@ HTML_TEMPLATE = """
     <title>🌍 3D Earthquake Visualization</title>
     <!-- Include CesiumJS -->
     <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <!-- Include Heatmap.js -->
+    <script src="https://cdn.jsdelivr.net/npm/heatmap.js/build/heatmap.min.js"></script>
     <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
     <style>
-        /* (Styles remain unchanged) */
+        html, body, #cesiumContainer {
+            width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+        }
+        #heatmapContainer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 2;
+            display: none;
+        }
+        /* Header Styling */
+        #header {
+            position: absolute;
+            top: 0; left: 0; width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px 30px;
+            box-sizing: border-box;
+            z-index: 3;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #header h1 {
+            margin: 0;
+            font-size: 24px;
+            color: #333;
+            text-align: center;
+        }
+        #header p {
+            margin: 8px 0 15px 0;
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+            max-width: 800px;
+        }
+        #controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+        }
+        #controls label {
+            font-size: 14px;
+            color: #333;
+        }
+        /* Slider Styling */
+        #dateRangeContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #dateRange {
+            width: 200px;
+        }
+        #controls button, #controls select {
+            padding: 6px 12px;
+            font-size: 14px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #0078D7;
+            color: #fff;
+            transition: background-color 0.3s;
+        }
+        #controls button:hover, #controls select:hover {
+            background-color: #005a9e;
+        }
+        /* Legend Styling */
+        #legend {
+            margin-top: 15px;
+            background: rgba(255,255,255,0.9);
+            padding: 10px 15px;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            border-radius: 3px;
+        }
+        /* Earthquake Bar Styling */
+        #earthquakeBar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 0;
+            box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
+            z-index: 3;
+            display: flex;
+            overflow-x: auto;
+            align-items: center;
+        }
+        #earthquakeBar::-webkit-scrollbar {
+            height: 8px;
+        }
+        #earthquakeBar::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 4px;
+        }
+        .bar-item {
+            flex: 0 0 auto;
+            margin: 0 15px;
+            font-size: 14px;
+            color: #0078D7;
+            cursor: pointer;
+            transition: color 0.3s;
+            white-space: nowrap;
+        }
+        .bar-item:hover {
+            color: #005a9e;
+            text-decoration: underline;
+        }
+        /* Modal Styling */
+        #modal {
+            display: none;
+            position: fixed;
+            z-index: 4;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+        #modalContent {
+            background-color: #fff;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 90%;
+            max-width: 800px;
+            border-radius: 5px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        #closeModal {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #closeModal:hover,
+        #closeModal:focus {
+            color: #000;
+            text-decoration: none;
+        }
+        /* Tooltip Styling */
+        #tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            pointer-events: none;
+            font-size: 13px;
+            z-index: 5;
+            display: none;
+            max-width: 300px;
+            word-wrap: break-word;
+        }
+        /* Search Box Styling */
+        #searchBox {
+            position: absolute;
+            top: 15px;
+            right: 30px;
+            z-index: 4;
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 5px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        #searchInput {
+            border: none;
+            outline: none;
+            padding: 5px;
+            font-size: 14px;
+        }
+        #searchButton {
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 5px;
+        }
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            #header {
+                padding: 10px 20px;
+            }
+            #header h1 {
+                font-size: 20px;
+            }
+            #header p {
+                font-size: 12px;
+            }
+            #controls {
+                flex-direction: column;
+                gap: 10px;
+            }
+            #controls label, #controls input[type=range], #controls button, #controls select {
+                width: 100%;
+                text-align: center;
+            }
+            #legend {
+                flex-direction: column;
+                gap: 8px;
+            }
+            #earthquakeBar {
+                padding: 8px 0;
+            }
+            .bar-item {
+                margin: 0 10px;
+                font-size: 12px;
+            }
+            #searchBox {
+                top: 10px;
+                right: 20px;
+            }
+        }
     </style>
 </head>
 <body>
     <div id="cesiumContainer"></div>
+    <div id="heatmapContainer"></div>
 
     <!-- Header with title, description, and controls -->
     <div id="header">
-        <!-- (Header content remains unchanged) -->
+        <h1>🌍 3D Earthquake Visualization</h1>
+        <p>Explore recent earthquakes around the world in an interactive 3D map.</p>
+        <div id="controls">
+            <div id="dateRangeContainer">
+                <label for="dateRange">Date Range (Days): <span id="dateRangeValue">7</span></label>
+                <input type="range" id="dateRange" min="1" max="30" value="7">
+            </div>
+            <button id="toggleHeatmap">Enable Heatmap</button>
+            <select id="basemapSelector">
+                <option value="Cesium World Imagery">Cesium World Imagery (Default)</option>
+                <option value="OpenStreetMap">OpenStreetMap</option>
+            </select>
+        </div>
+        <div id="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #d7191c;"></div>
+                <span>Mag ≥ 5.0</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #fdae61;"></div>
+                <span>4.0 ≤ Mag < 5.0</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #ffffbf;"></div>
+                <span>3.0 ≤ Mag < 4.0</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #a6d96a;"></div>
+                <span>2.0 ≤ Mag < 3.0</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #1a9641;"></div>
+                <span>Mag < 2.0</span>
+            </div>
+        </div>
     </div>
 
     <!-- Earthquake bar -->
@@ -42,7 +316,8 @@ HTML_TEMPLATE = """
 
     <!-- Search box -->
     <div id="searchBox">
-        <!-- (Search box remains unchanged) -->
+        <input type="text" id="searchInput" placeholder="Search location...">
+        <button id="searchButton">🔍</button>
     </div>
 
     <!-- Tooltip -->
@@ -50,7 +325,21 @@ HTML_TEMPLATE = """
 
     <!-- Modal for viewing all earthquakes -->
     <div id="modal">
-        <!-- (Modal content remains unchanged) -->
+        <div id="modalContent">
+            <span id="closeModal">&times;</span>
+            <h2>All Earthquakes</h2>
+            <table id="fullEqTable">
+                <thead>
+                    <tr>
+                        <th>Mag</th>
+                        <th>Depth (km)</th>
+                        <th>Location</th>
+                        <th>Time (UTC)</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
     </div>
 
     <!-- Script Section -->
@@ -73,7 +362,20 @@ HTML_TEMPLATE = """
 
         let heatmapEnabled = false;
         let earthquakes = [];
-        let heatmapDataSource;
+
+        // Initialize Heatmap.js
+        const heatmapInstance = h337.create({
+            container: document.getElementById('heatmapContainer'),
+            radius: 25,
+            maxOpacity: 0.6,
+            minOpacity: 0,
+            blur: 0.75,
+            gradient: {
+                0.0: 'blue',
+                0.5: 'yellow',
+                1.0: 'red'
+            }
+        });
 
         // Function to get color based on magnitude
         function getColor(magnitude) {
@@ -103,6 +405,9 @@ HTML_TEMPLATE = """
                     }
                     earthquakes = data.features.sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
                     updateEarthquakeData();
+                })
+                .catch(error => {
+                    console.error('Error fetching earthquake data:', error);
                 });
         }
 
@@ -128,19 +433,17 @@ HTML_TEMPLATE = """
             viewAll.onclick = () => openModal();
             bar.appendChild(viewAll);
 
-            // Remove existing entities and heatmap
+            // Remove existing entities
             viewer.entities.removeAll();
-            if (heatmapDataSource) {
-                viewer.dataSources.remove(heatmapDataSource);
-                heatmapDataSource = null;
-            }
 
             if (heatmapEnabled) {
-                addHeatmap();
+                generateHeatmap();
                 document.getElementById('heatmapContainer').style.display = 'block';
             } else {
+                removeHeatmap();
                 addEarthquakePoints();
                 document.getElementById('heatmapContainer').style.display = 'none';
+                // Only zoom to entities if heatmap is disabled
                 if (earthquakes.length > 0) {
                     viewer.zoomTo(viewer.entities).otherwise(() => {
                         console.log('Zoom failed');
@@ -173,41 +476,41 @@ HTML_TEMPLATE = """
             });
         }
 
-        // Add heatmap using Cesium's PointPrimitiveCollection
-        function addHeatmap() {
-            heatmapDataSource = new Cesium.CustomDataSource('heatmap');
-            viewer.dataSources.add(heatmapDataSource);
+        // Generate heatmap data based on earthquake locations and magnitudes
+        function generateHeatmap() {
+            const heatData = [];
 
-            const points = earthquakes.map(eq => {
+            earthquakes.forEach(eq => {
                 const [lon, lat] = eq.geometry.coordinates;
                 const mag = eq.properties.mag || 0;
-                return {
-                    position: Cesium.Cartesian3.fromDegrees(lon, lat),
-                    color: Cesium.Color.RED.withAlpha(0.5),
-                    pixelSize: mag * 2
-                };
-            });
-
-            heatmapDataSource.entities.add({
-                name: 'Heatmap',
-                position: Cesium.Cartesian3.fromDegrees(0,0),
-                point: {
-                    pixelSize: 1,
-                    color: Cesium.Color.TRANSPARENT,
-                    outlineWidth: 0
+                const cartesian = Cesium.Cartesian3.fromDegrees(lon, lat);
+                const windowPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
+                if (Cesium.defined(windowPosition)) {
+                    heatData.push({ x: windowPosition.x, y: windowPosition.y, value: mag });
                 }
             });
 
-            points.forEach(point => {
-                heatmapDataSource.entities.add({
-                    position: point.position,
-                    point: {
-                        pixelSize: point.pixelSize,
-                        color: Cesium.Color.RED.withAlpha(0.5)
-                    }
-                });
+            heatmapInstance.setData({
+                max: 10,
+                data: heatData
             });
         }
+
+        // Remove heatmap data
+        function removeHeatmap() {
+            heatmapInstance.setData({ max: 10, data: [] });
+        }
+
+        // Update heatmap on camera move with debounce
+        let heatmapTimeout;
+        viewer.scene.postRender.addEventListener(() => {
+            if (heatmapEnabled) {
+                if (heatmapTimeout) clearTimeout(heatmapTimeout);
+                heatmapTimeout = setTimeout(() => {
+                    generateHeatmap();
+                }, 500);
+            }
+        });
 
         // Fly to a specific earthquake location
         function flyToEarthquake(index) {
@@ -335,8 +638,24 @@ HTML_TEMPLATE = """
         document.getElementById('toggleHeatmap').addEventListener('click', function() {
             heatmapEnabled = !heatmapEnabled;
             this.innerText = heatmapEnabled ? 'Disable Heatmap' : 'Enable Heatmap';
-            updateEarthquakeData();
+            updateHeatmapVisibility();
         });
+
+        function updateHeatmapVisibility() {
+            if (heatmapEnabled) {
+                generateHeatmap();
+                document.getElementById('heatmapContainer').style.display = 'block';
+            } else {
+                removeHeatmap();
+                document.getElementById('heatmapContainer').style.display = 'none';
+                addEarthquakePoints();
+                if (earthquakes.length > 0) {
+                    viewer.zoomTo(viewer.entities).otherwise(() => {
+                        console.log('Zoom failed');
+                    });
+                }
+            }
+        }
 
         // Fetch initial earthquake data
         fetchEarthquakes(7);
@@ -351,3 +670,6 @@ def index():
         HTML_TEMPLATE,
         cesium_token=CESIUM_ION_ACCESS_TOKEN
     )
+
+if __name__ == '__main__':
+    app.run(debug=True)
