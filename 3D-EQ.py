@@ -1,6 +1,7 @@
+# 3D-EQ.py
+
 import os
 from flask import Flask, render_template_string
-from threading import Thread
 
 # Define Flask app
 app = Flask(__name__)
@@ -8,7 +9,11 @@ app = Flask(__name__)
 # Retrieve the Cesium Ion Access Token from environment variables
 CESIUM_ION_ACCESS_TOKEN = os.environ.get('CESIUM_ION_ACCESS_TOKEN')
 
-# Updated HTML template with requested enhancements
+# Ensure the Cesium Ion Access Token is available
+if not CESIUM_ION_ACCESS_TOKEN:
+    raise ValueError("CESIUM_ION_ACCESS_TOKEN environment variable is not set.")
+
+# HTML template with enhancements
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -560,5 +565,3 @@ HTML_TEMPLATE = """
 def index():
     return render_template_string(HTML_TEMPLATE, cesium_token=CESIUM_ION_ACCESS_TOKEN)
 
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8006)))
