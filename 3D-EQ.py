@@ -13,7 +13,7 @@ CESIUM_ION_ACCESS_TOKEN = os.environ.get('CESIUM_ION_ACCESS_TOKEN')
 if not CESIUM_ION_ACCESS_TOKEN:
     raise ValueError("CESIUM_ION_ACCESS_TOKEN environment variable is not set.")
 
-# HTML template with enhanced data handling and slider compatibility
+# HTML template with fixes for map loading and earthquake data display
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -23,7 +23,7 @@ HTML_TEMPLATE = """
     <!-- Include CesiumJS -->
     <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
     <!-- Include Heatmap.js -->
-    <script src="https://cdn.jsdelivr.net/npm/heatmap.js/heatmap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/heatmap.js/build/heatmap.min.js"></script>
     <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
     <style>
         html, body, #cesiumContainer {
@@ -39,6 +39,7 @@ HTML_TEMPLATE = """
             z-index: 2;
             display: none;
         }
+        /* Header Styling */
         #header {
             position: absolute;
             top: 0; left: 0; width: 100%;
@@ -75,7 +76,7 @@ HTML_TEMPLATE = """
             font-size: 14px;
             color: #333;
         }
-        /* Slider with stops */
+        /* Slider Styling */
         #dateRangeContainer {
             display: flex;
             flex-direction: column;
@@ -97,6 +98,7 @@ HTML_TEMPLATE = """
         #controls button:hover, #controls select:hover {
             background-color: #005a9e;
         }
+        /* Legend Styling */
         #legend {
             margin-top: 15px;
             background: rgba(255,255,255,0.9);
@@ -119,6 +121,7 @@ HTML_TEMPLATE = """
             margin-right: 8px;
             border-radius: 3px;
         }
+        /* Earthquake Bar Styling */
         #earthquakeBar {
             position: absolute;
             bottom: 0;
@@ -152,6 +155,7 @@ HTML_TEMPLATE = """
             color: #005a9e;
             text-decoration: underline;
         }
+        /* Modal Styling */
         #modal {
             display: none;
             position: fixed;
@@ -185,6 +189,7 @@ HTML_TEMPLATE = """
             color: #000;
             text-decoration: none;
         }
+        /* Tooltip Styling */
         #tooltip {
             position: absolute;
             background: rgba(0, 0, 0, 0.8);
@@ -198,6 +203,7 @@ HTML_TEMPLATE = """
             max-width: 300px;
             word-wrap: break-word;
         }
+        /* Search Box Styling */
         #searchBox {
             position: absolute;
             top: 15px;
@@ -223,6 +229,7 @@ HTML_TEMPLATE = """
             font-size: 16px;
             padding: 5px;
         }
+        /* Responsive Design */
         @media (max-width: 768px) {
             #header {
                 padding: 10px 20px;
@@ -266,18 +273,15 @@ HTML_TEMPLATE = """
     <!-- Header with title, description, and controls -->
     <div id="header">
         <h1>🌍 3D Earthquake Visualization</h1>
-        <p>Interactive 3D map displaying recent earthquakes around the world. Explore seismic activity with detailed information and visual representations.</p>
+        <p>Explore recent earthquakes around the world in an interactive 3D map.</p>
         <div id="controls">
             <div id="dateRangeContainer">
-                <label for="dateRange">Date Range:</label>
-                <input type="range" id="dateRange" min="0" max="3" step="1" value="1">
-                <span id="dateRangeLabel">Past Day</span>
+                <label for="dateRange">Date Range (Days): <span id="dateRangeValue">7</span></label>
+                <input type="range" id="dateRange" min="1" max="30" value="7">
             </div>
             <button id="toggleHeatmap">Enable Heatmap</button>
             <select id="basemapSelector">
-                <option value="Cesium World Imagery">Default</option>
-                <option value="Bing Aerial">Bing Aerial</option>
-                <option value="Bing Roads">Bing Roads</option>
+                <option value="Cesium World Imagery">Cesium World Imagery (Default)</option>
                 <option value="OpenStreetMap">OpenStreetMap</option>
             </select>
         </div>
@@ -356,9 +360,6 @@ HTML_TEMPLATE = """
             navigationInstructionsInitiallyVisible: false
         });
 
-        // Zoom Controls using Cesium's built-in methods
-        viewer.extend(Cesium.viewerCesiumNavigationMixin, {});
-
         let heatmapEnabled = false;
         let earthquakes = [];
 
@@ -376,69 +377,7 @@ HTML_TEMPLATE = """
             }
         });
 
-        // Mapping slider values to API feeds
-        const feedMapping = {
-            0: 'hour',   // Past Hour
-            1: 'day',    // Past Day
-            2: 'week',   // Past Week
-            3: 'month'   // Past Month
-        };
-
-        const feedLabels = {
-            0: 'Past Hour',
-            1: 'Past Day',
-            2: 'Past Week',
-            3: 'Past Month'
-        };
-
-        // Update the label based on slider value
-        const dateRange = document.getElementById('dateRange');
-        const dateRangeLabel = document.getElementById('dateRangeLabel');
-        dateRange.oninput = function() {
-            dateRangeLabel.innerText = feedLabels[this.value];
-            fetchEarthquakes(feedMapping[this.value]);
-        };
-
-        // Set initial label
-        dateRangeLabel.innerText = feedLabels[dateRange.value];
-
-        document.getElementById('toggleHeatmap').onclick = function() {
-            heatmapEnabled = !heatmapEnabled;
-            updateEarthquakeData();
-            this.innerText = heatmapEnabled ? 'Disable Heatmap' : 'Enable Heatmap';
-        };
-
-        // Basemap selector functionality
-        document.getElementById('basemapSelector').onchange = function() {
-            const selectedBasemap = this.value;
-            if (viewer.baseLayer) {
-                viewer.imageryLayers.remove(viewer.baseLayer, false);
-            }
-            switch(selectedBasemap) {
-                case 'Bing Aerial':
-                    viewer.baseLayer = viewer.imageryLayers.addImageryProvider(new Cesium.BingMapsImageryProvider({
-                        url : 'https://dev.virtualearth.net',
-                        key: '<Your_Bing_Maps_Key>',
-                        mapStyle : Cesium.BingMapsStyle.AERIAL
-                    }));
-                    break;
-                case 'Bing Roads':
-                    viewer.baseLayer = viewer.imageryLayers.addImageryProvider(new Cesium.BingMapsImageryProvider({
-                        url : 'https://dev.virtualearth.net',
-                        key: '<Your_Bing_Maps_Key>',
-                        mapStyle : Cesium.BingMapsStyle.ROAD
-                    }));
-                    break;
-                case 'OpenStreetMap':
-                    viewer.baseLayer = viewer.imageryLayers.addImageryProvider(new Cesium.OpenStreetMapImageryProvider({
-                        url : 'https://a.tile.openstreetmap.org/'
-                    }));
-                    break;
-                default:
-                    viewer.baseLayer = viewer.imageryLayers.addImageryProvider(new Cesium.IonImageryProvider({ assetId: 2 }));
-            }
-        };
-
+        // Function to get color based on magnitude
         function getColor(magnitude) {
             if (magnitude >= 5.0) return Cesium.Color.fromCssColorString('#d7191c').withAlpha(0.8);
             if (magnitude >= 4.0) return Cesium.Color.fromCssColorString('#fdae61').withAlpha(0.8);
@@ -447,44 +386,53 @@ HTML_TEMPLATE = """
             return Cesium.Color.fromCssColorString('#1a9641').withAlpha(0.8);
         }
 
-        async function fetchEarthquakes(feed) {
-            const url = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_${feed}.geojson`;
-            try {
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`API response not ok: ${response.status}`);
-                }
-                const data = await response.json();
-                if (!data.features) {
-                    throw new Error('Invalid data format: Missing features');
-                }
-                earthquakes = data.features.sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
-                updateEarthquakeData();
-            } catch (error) {
-                console.error('Error fetching earthquake data:', error);
-                alert('Failed to load earthquake data. Please try again later.');
+        // Fetch earthquakes from USGS API based on days
+        function fetchEarthquakes(days) {
+            let feed = 'month'; // Default feed
+            if (days <= 1) {
+                feed = 'hour';
+            } else if (days <= 7) {
+                feed = 'day';
+            } else {
+                feed = 'month';
             }
+            const url = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_${feed}.geojson`;
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.features) {
+                        throw new Error("Invalid earthquake data format.");
+                    }
+                    earthquakes = data.features.sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
+                    updateEarthquakeData();
+                })
+                .catch(error => {
+                    console.error('Error fetching earthquake data:', error);
+                    alert('Failed to load earthquake data. Please try again later.');
+                });
         }
 
+        // Update earthquake data on the map and top list
         function updateEarthquakeData() {
             const top10 = earthquakes.slice(0, 10);
             const bar = document.getElementById('earthquakeBar');
             bar.innerHTML = '<div class="bar-item"><strong>Top Earthquakes:</strong></div>';
 
-            top10.forEach(eq) => {
+            top10.forEach((eq, index) => {
                 const mag = eq.properties.mag || 0;
                 const place = eq.properties.place || 'Unknown';
                 const div = document.createElement('div');
                 div.className = 'bar-item';
-                div.innerHTML = `<strong>${mag.toFixed(1)}</strong> - ${place}`;
-                div.onclick = () => flyToEarthquake(eq);
+                div.innerText = `⭐ ${mag.toFixed(1)} - ${place}`;
+                div.onclick = () => flyToEarthquake(earthquakes.indexOf(eq));
                 bar.appendChild(div);
             });
 
             const viewAll = document.createElement('div');
             viewAll.className = 'bar-item';
             viewAll.innerHTML = `<strong>View All</strong>`;
-            viewAll.onclick = () => openModal(earthquakes);
+            viewAll.onclick = () => openModal();
             bar.appendChild(viewAll);
 
             // Remove existing entities
@@ -499,13 +447,16 @@ HTML_TEMPLATE = """
                 document.getElementById('heatmapContainer').style.display = 'none';
             }
 
-            viewer.zoomTo(viewer.entities).otherwise(() => {
-                console.log('Zoom failed');
-            });
+            if (earthquakes.length > 0) {
+                viewer.zoomTo(viewer.entities).otherwise(() => {
+                    console.log('Zoom failed');
+                });
+            }
         }
 
+        // Add earthquake points to the Cesium viewer
         function addEarthquakePoints() {
-            earthquakes.forEach(eq) => {
+            earthquakes.forEach(eq => {
                 const [lon, lat, depth] = eq.geometry.coordinates;
                 const mag = eq.properties.mag || 0;
                 const depthKm = depth !== null && depth !== undefined ? depth.toFixed(1) : 'Unknown';
@@ -527,16 +478,17 @@ HTML_TEMPLATE = """
             });
         }
 
+        // Generate heatmap data based on earthquake locations and magnitudes
         function generateHeatmap() {
             heatmapInstance.setData({ max: 10, data: [] });
 
-            const heatData = earthquakes.map(eq) => {
+            const heatData = earthquakes.map(eq => {
                 const [lon, lat] = eq.geometry.coordinates;
                 const mag = eq.properties.mag || 0;
                 const cartesian = Cesium.Cartesian3.fromDegrees(lon, lat);
-                const cartesian2 = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
-                if (cartesian2) {
-                    return { x: cartesian2.x, y: cartesian2.y, value: mag };
+                const windowPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
+                if (Cesium.defined(windowPosition)) {
+                    return { x: windowPosition.x, y: windowPosition.y, value: mag };
                 }
                 return null;
             }).filter(point => point !== null);
@@ -547,18 +499,29 @@ HTML_TEMPLATE = """
             });
         }
 
+        // Remove heatmap data
         function removeHeatmap() {
             heatmapInstance.setData({ max: 10, data: [] });
         }
 
-        // Update heatmap on camera move
+        // Update heatmap on camera move with debounce
+        let heatmapTimeout;
         viewer.scene.postRender.addEventListener(() => {
             if (heatmapEnabled) {
-                generateHeatmap();
+                if (heatmapTimeout) clearTimeout(heatmapTimeout);
+                heatmapTimeout = setTimeout(() => {
+                    generateHeatmap();
+                }, 500); // Adjust the delay as needed
             }
         });
 
-        function flyToEarthquake(eq) {
+        // Fly to a specific earthquake location
+        function flyToEarthquake(index) {
+            const eq = earthquakes[index];
+            if (!eq) {
+                console.error('Invalid earthquake index:', index);
+                return;
+            }
             const [lon, lat] = eq.geometry.coordinates;
             viewer.camera.flyTo({
                 destination: Cesium.Cartesian3.fromDegrees(lon, lat, 200000),
@@ -567,6 +530,7 @@ HTML_TEMPLATE = """
             });
         }
 
+        // Tooltip functionality
         const tooltip = document.getElementById('tooltip');
         const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 
@@ -583,6 +547,7 @@ HTML_TEMPLATE = """
 
         handler.setInputAction(() => { tooltip.style.display = 'none'; }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
 
+        // Update tooltip position based on mouse movement
         function updateTooltipPosition(position) {
             const x = position.x + 15;
             const y = position.y + 15;
@@ -590,45 +555,48 @@ HTML_TEMPLATE = """
             tooltip.style.top = y + 'px';
         }
 
+        // Modal functionality for viewing all earthquakes
         const modal = document.getElementById('modal');
         document.getElementById('closeModal').onclick = () => modal.style.display = 'none';
         window.onclick = event => { if (event.target == modal) modal.style.display = 'none'; }
 
+        // Search location functionality
         document.getElementById('searchButton').onclick = searchLocation;
         document.getElementById('searchInput').onkeydown = e => { if (e.key === 'Enter') searchLocation(); };
 
-        async function searchLocation() {
+        function searchLocation() {
             const query = document.getElementById('searchInput').value.trim();
             if (!query) return;
-            try {
-                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
-                const data = await response.json();
-                if (data.length) {
-                    const { lon, lat } = data[0];
-                    viewer.camera.flyTo({
-                        destination: Cesium.Cartesian3.fromDegrees(parseFloat(lon), parseFloat(lat), 80000),
-                        duration: 2,
-                        orientation: { pitch: Cesium.Math.toRadians(-30) }
-                    });
-                } else {
-                    alert('Location not found.');
-                }
-            } catch (error) {
-                console.error('Error searching location:', error);
-                alert('Failed to search location. Please try again later.');
-            }
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.length) {
+                        const { lon, lat } = data[0];
+                        viewer.camera.flyTo({
+                            destination: Cesium.Cartesian3.fromDegrees(parseFloat(lon), parseFloat(lat), 80000),
+                            duration: 2,
+                            orientation: { pitch: Cesium.Math.toRadians(-30) }
+                        });
+                    } else {
+                        alert('Location not found.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error searching location:', error);
+                });
         }
 
-        function openModal(earthquakes) {
+        // Open modal to display all earthquakes
+        function openModal() {
             const tbody = document.querySelector('#fullEqTable tbody');
             if (!earthquakes.length) {
                 tbody.innerHTML = '<tr><td colspan="4">No earthquake data available.</td></tr>';
                 return;
             }
-            tbody.innerHTML = earthquakes.map(eq) => {
+            tbody.innerHTML = earthquakes.map((eq, index) => {
                 const depth = eq.geometry.coordinates[2] !== null && eq.geometry.coordinates[2] !== undefined ? eq.geometry.coordinates[2].toFixed(1) : 'Unknown';
                 return `
-                    <tr onclick='flyToEarthquake(${JSON.stringify(eq)})' style="cursor:pointer;">
+                    <tr onclick='flyToEarthquake(${index})' style="cursor:pointer;">
                         <td>${(eq.properties.mag || 0).toFixed(1)}</td>
                         <td>${depth}</td>
                         <td>${eq.properties.place || 'Unknown'}</td>
@@ -642,8 +610,31 @@ HTML_TEMPLATE = """
         // Ensure flyToEarthquake is accessible globally
         window.flyToEarthquake = flyToEarthquake;
 
+        // Basemap selector functionality
+        document.getElementById('basemapSelector').onchange = function() {
+            const selectedBasemap = this.value;
+            // Remove existing base layers except the first one
+            while (viewer.imageryLayers.length > 1) {
+                viewer.imageryLayers.remove(viewer.imageryLayers.get(1));
+            }
+            switch(selectedBasemap) {
+                case 'OpenStreetMap':
+                    viewer.imageryLayers.addImageryProvider(new Cesium.OpenStreetMapImageryProvider({
+                        url : 'https://a.tile.openstreetmap.org/'
+                    }));
+                    break;
+                case 'Cesium World Imagery':
+                default:
+                    // Reset to Cesium World Imagery
+                    viewer.imageryLayers.addImageryProvider(new Cesium.IonImageryProvider({ assetId: 2 }));
+            }
+        };
+
+        // Initialize the basemap selector to default
+        document.getElementById('basemapSelector').value = 'Cesium World Imagery';
+
         // Fetch initial earthquake data
-        fetchEarthquakes(feedMapping[dateRange.value]);
+        fetchEarthquakes(7);
     </script>
 </body>
 </html>
@@ -651,5 +642,8 @@ HTML_TEMPLATE = """
 
 @app.route('/')
 def index():
-    return render_template_string(HTML_TEMPLATE, cesium_token=CESIUM_ION_ACCESS_TOKEN)
+    return render_template_string(
+        HTML_TEMPLATE,
+        cesium_token=CESIUM_ION_ACCESS_TOKEN
+    )
 
