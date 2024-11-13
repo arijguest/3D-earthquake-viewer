@@ -20,8 +20,10 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <title>🌍 3D Earthquake Visualization</title>
+    <!-- Include CesiumJS -->
     <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/heatmap.js/2.0.5/heatmap.min.js"></script>
+    <!-- Include CesiumHeatmap -->
+    <script src="https://cdn.jsdelivr.net/gh/ReconNetworks/CesiumHeatmap/CesiumHeatmap.min.js"></script>
     <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
     <style>
         html, body, #cesiumContainer {
@@ -371,7 +373,8 @@ HTML_TEMPLATE = """
         viewer.scene.screenSpaceCameraController.maximumZoomDistance = 20000000;
 
         let heatmap = false;
-        let heatmapInstance;
+        let heatmapLayer;
+        let earthquakes = [];
 
         function getColor(magnitude) {
             if (magnitude >= 5.0) return Cesium.Color.fromCssColorString('#d7191c').withAlpha(0.8);
@@ -388,64 +391,97 @@ HTML_TEMPLATE = """
             fetch(url)
                 .then(response => response.json())
                 .then(data => {
-                    const earthquakes = data.features.sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
-                    const top10 = earthquakes.slice(0, 10);
-                    const bar = document.getElementById('earthquakeBar');
-                    bar.innerHTML = '<div class="bar-item"><strong>Top Earthquakes:</strong></div>';
-
-                    top10.forEach(eq => {
-                        const mag = eq.properties.mag || 0;
-                        const place = eq.properties.place || 'Unknown';
-                        const div = document.createElement('div');
-                        div.className = 'bar-item';
-                        div.innerHTML = `<strong>${mag.toFixed(1)}</strong> - ${place}`;
-                        div.onclick = () => flyToEarthquake(eq);
-                        bar.appendChild(div);
-                    });
-
-                    const viewAll = document.createElement('div');
-                    viewAll.className = 'bar-item';
-                    viewAll.innerHTML = `<strong>View All</strong>`;
-                    viewAll.onclick = () => openModal(earthquakes);
-                    bar.appendChild(viewAll);
-
-                    viewer.entities.removeAll();
-                    if (heatmap) {
-                        heatmapInstance.setData({ max: 5.0, data: [] });
-                    }
-
-                    const heatmapData = [];
-
-                    earthquakes.forEach(eq => {
-                        const [lon, lat] = eq.geometry.coordinates;
-                        const mag = eq.properties.mag || 0;
-                        viewer.entities.add({
-                            position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
-                            point: {
-                                pixelSize: 6 + mag * 2,
-                                color: getColor(mag),
-                                outlineColor: Cesium.Color.BLACK,
-                                outlineWidth: 1
-                            },
-                            description: `
-                                <b>Magnitude:</b> ${mag}<br>
-                                <b>Location:</b> ${eq.properties.place}<br>
-                                <b>Time:</b> ${new Date(eq.properties.time).toISOString().slice(0,19)} UTC
-                            `
-                        });
-                        heatmapData.push({ x: lon, y: lat, value: mag });
-                    });
-
-                    if (heatmap) {
-                        heatmapInstance.setData({ max: 5.0, data: heatmapData.map(d => ({ x: d.x, y: d.y, value: d.value })) });
-                    }
-
-                    viewer.zoomTo(viewer.entities);
+                    earthquakes = data.features.sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
+                    updateEarthquakeData();
                 })
                 .catch(console.error);
         }
 
-        fetchEarthquakes(7);
+        function updateEarthquakeData() {
+            const top10 = earthquakes.slice(0, 10);
+            const bar = document.getElementById('earthquakeBar');
+            bar.innerHTML = '<div class="bar-item"><strong>Top Earthquakes:</strong></div>';
+
+            top10.forEach(eq => {
+                const mag = eq.properties.mag || 0;
+                const place = eq.properties.place || 'Unknown';
+                const div = document.createElement('div');
+                div.className = 'bar-item';
+                div.innerHTML = `<strong>${mag.toFixed(1)}</strong> - ${place}`;
+                div.onclick = () => flyToEarthquake(eq);
+                bar.appendChild(div);
+            });
+
+            const viewAll = document.createElement('div');
+            viewAll.className = 'bar-item';
+            viewAll.innerHTML = `<strong>View All</strong>`;
+            viewAll.onclick = () => openModal(earthquakes);
+            bar.appendChild(viewAll);
+
+            viewer.entities.removeAll();
+            if (heatmapLayer) {
+                viewer.imageryLayers.remove(heatmapLayer);
+                heatmapLayer = null;
+            }
+
+            if (heatmap) {
+                createHeatmapLayer();
+            } else {
+                addEarthquakePoints();
+            }
+
+            viewer.zoomTo(viewer.entities);
+        }
+
+        function addEarthquakePoints() {
+            earthquakes.forEach(eq => {
+                const [lon, lat] = eq.geometry.coordinates;
+                const mag = eq.properties.mag || 0;
+                viewer.entities.add({
+                    position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+                    point: {
+                        pixelSize: 6 + mag * 2,
+                        color: getColor(mag),
+                        outlineColor: Cesium.Color.BLACK,
+                        outlineWidth: 1
+                    },
+                    description: `
+                        <b>Magnitude:</b> ${mag}<br>
+                        <b>Location:</b> ${eq.properties.place}<br>
+                        <b>Time:</b> ${new Date(eq.properties.time).toISOString().slice(0,19)} UTC
+                    `
+                });
+            });
+        }
+
+        function createHeatmapLayer() {
+            const heatmapData = earthquakes.map(eq => {
+                const [lon, lat] = eq.geometry.coordinates;
+                const mag = eq.properties.mag || 0;
+                return { x: lon, y: lat, value: mag };
+            });
+
+            const bounds = {
+                west: -180,
+                east: 180,
+                south: -90,
+                north: 90
+            };
+
+            heatmapLayer = viewer.imageryLayers.addImageryProvider(CesiumHeatmap.createHeatmapImageryProvider({
+                bounds: bounds,
+                data: heatmapData,
+                min: 0,
+                max: 10,
+                gradient: {
+                    0.0: 'blue',
+                    0.5: 'yellow',
+                    1.0: 'red'
+                },
+                radius: 15,
+                blur: 0.85,
+            }));
+        }
 
         document.getElementById('dateRange').oninput = function() {
             document.getElementById('dateRangeValue').innerText = this.value;
@@ -454,28 +490,8 @@ HTML_TEMPLATE = """
 
         document.getElementById('toggleHeatmap').onclick = function() {
             heatmap = !heatmap;
-            if (heatmap) {
-                heatmapInstance = h337.create({
-                    container: document.getElementById('cesiumContainer'),
-                    radius: 40,
-                    maxOpacity: 0.6,
-                    minOpacity: 0,
-                    blur: 0.75,
-                    gradient: {
-                        0.0: 'blue',
-                        0.5: 'lime',
-                        0.7: 'yellow',
-                        1.0: 'red'
-                    }
-                });
-                fetchEarthquakes(parseInt(document.getElementById('dateRange').value));
-                this.innerText = 'Disable Heatmap';
-            } else {
-                heatmapInstance.remove();
-                heatmapInstance = null;
-                fetchEarthquakes(parseInt(document.getElementById('dateRange').value));
-                this.innerText = 'Enable Heatmap';
-            }
+            updateEarthquakeData();
+            this.innerText = heatmap ? 'Disable Heatmap' : 'Enable Heatmap';
         };
 
         function flyToEarthquake(eq) {
@@ -526,15 +542,9 @@ HTML_TEMPLATE = """
                 .then(response => response.json())
                 .then(data => {
                     if (data.length) {
-                        const { lon, lat, boundingbox } = data[0];
-                        let height = 20000;
-                        if (boundingbox) {
-                            const [south, north, west, east] = boundingbox.map(Number);
-                            const maxDiff = Math.max(north - south, east - west);
-                            height = Math.min(Math.max(20000 / maxDiff, 10000), 80000);
-                        }
+                        const { lon, lat } = data[0];
                         viewer.camera.flyTo({
-                            destination: Cesium.Cartesian3.fromDegrees(parseFloat(lon), parseFloat(lat), height),
+                            destination: Cesium.Cartesian3.fromDegrees(parseFloat(lon), parseFloat(lat), 80000),
                             duration: 2,
                             orientation: { pitch: Cesium.Math.toRadians(-30) }
                         });
@@ -556,6 +566,9 @@ HTML_TEMPLATE = """
             `).join('');
             modal.style.display = 'block';
         }
+
+        // Fetch initial earthquake data
+        fetchEarthquakes(7);
     </script>
 </body>
 </html>
@@ -564,4 +577,3 @@ HTML_TEMPLATE = """
 @app.route('/')
 def index():
     return render_template_string(HTML_TEMPLATE, cesium_token=CESIUM_ION_ACCESS_TOKEN)
-

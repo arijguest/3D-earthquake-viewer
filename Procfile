@@ -1,3 +1,1 @@
-# Procfile
-
-web: gunicorn 3D-EQ:app
+web: gunicorn --timeout 120 --log-level debug --access-logfile - --error-logfile - 3D-EQ:app
