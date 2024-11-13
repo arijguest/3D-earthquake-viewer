@@ -405,6 +405,10 @@ HTML_TEMPLATE = """
                     }
                     earthquakes = data.features.sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
                     updateEarthquakeData();
+                })
+                .catch(error => {
+                    console.error('Error fetching earthquake data:', error);
+                    alert('Failed to load earthquake data. Please try again later.');
                 });
         }
 
@@ -440,12 +444,12 @@ HTML_TEMPLATE = """
                 removeHeatmap();
                 addEarthquakePoints();
                 document.getElementById('heatmapContainer').style.display = 'none';
-            }
-
-            if (earthquakes.length > 0) {
-                viewer.zoomTo(viewer.entities).otherwise(() => {
-                    console.log('Zoom failed');
-                });
+                // Only zoom to entities if heatmap is disabled
+                if (earthquakes.length > 0) {
+                    viewer.zoomTo(viewer.entities).otherwise(() => {
+                        console.log('Zoom failed');
+                    });
+                }
             }
         }
 
@@ -519,9 +523,9 @@ HTML_TEMPLATE = """
             }
             const [lon, lat] = eq.geometry.coordinates;
             viewer.camera.flyTo({
-                destination: Cesium.Cartesian3.fromDegrees(lon, lat, 400000),
+                destination: Cesium.Cartesian3.fromDegrees(lon, lat, 200000),
                 duration: 2,
-                orientation: { pitch: Cesium.Math.toRadians(-30) }
+                orientation: { pitch: Cesium.Math.toRadians(90) }
             });
         }
 
@@ -652,5 +656,3 @@ def index():
         HTML_TEMPLATE,
         cesium_token=CESIUM_ION_ACCESS_TOKEN
     )
-
-# Removed app.run() to comply with deployment requirements
