@@ -24,8 +24,6 @@ HTML_TEMPLATE = """
     <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
     <!-- Include Heatmap.js -->
     <script src="https://cdn.jsdelivr.net/npm/heatmapjs@2.0.5/heatmap.min.js"></script>
-    <!-- Include CesiumHeatmap (Custom Implementation) -->
-    <script src="https://cdn.jsdelivr.net/gh/ReconNetworks/CesiumHeatmap/CesiumHeatmap.min.js"></script>
     <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
     <style>
         html, body, #cesiumContainer {
@@ -236,6 +234,16 @@ HTML_TEMPLATE = """
             font-size: 16px;
             padding: 5px;
         }
+        #heatmapContainer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 3;
+            display: none;
+        }
         @media (max-width: 1024px) {
             #sidebar {
                 width: 280px;
@@ -278,6 +286,9 @@ HTML_TEMPLATE = """
                 top: 50px;
                 right: 20px;
             }
+            #heatmapContainer {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -315,6 +326,7 @@ HTML_TEMPLATE = """
     </div>
 
     <div id="cesiumContainer"></div>
+    <div id="heatmapContainer"></div>
 
     <div id="earthquakeBar">
         <div class="bar-item"><strong>Top Earthquakes:</strong></div>
@@ -375,12 +387,12 @@ HTML_TEMPLATE = """
         viewer.scene.screenSpaceCameraController.maximumZoomDistance = 20000000;
 
         let heatmap = false;
-        let heatmapLayer;
         let earthquakes = [];
 
         // Initialize Heatmap.js
+        const heatmapContainer = document.getElementById('heatmapContainer');
         const heatmapInstance = h337.create({
-            container: document.createElement('div'), // Temporary container
+            container: heatmapContainer,
             radius: 15,
             maxOpacity: 0.6,
             minOpacity: 0,
@@ -434,16 +446,17 @@ HTML_TEMPLATE = """
             viewAll.onclick = () => openModal(earthquakes);
             bar.appendChild(viewAll);
 
+            // Remove existing entities
             viewer.entities.removeAll();
-            if (heatmapLayer) {
-                viewer.imageryLayers.remove(heatmapLayer);
-                heatmapLayer = null;
-            }
 
             if (heatmap) {
-                createHeatmapLayer();
+                generateHeatmap();
+                heatmapContainer.style.display = 'block';
+                // Hide earthquake points when heatmap is enabled
             } else {
+                removeHeatmap();
                 addEarthquakePoints();
+                heatmapContainer.style.display = 'none';
             }
 
             viewer.zoomTo(viewer.entities);
@@ -470,42 +483,48 @@ HTML_TEMPLATE = """
             });
         }
 
-        function createHeatmapLayer() {
-            // Prepare data for heatmap.js
+        function generateHeatmap() {
+            // Clear previous heatmap data
+            heatmapInstance.setData({
+                max: 10,
+                data: []
+            });
+
+            // Prepare heatmap data
             const heatmapData = earthquakes.map(eq => {
                 const [lon, lat] = eq.geometry.coordinates;
                 const mag = eq.properties.mag || 0;
-                return {
-                    x: lon,
-                    y: lat,
-                    value: mag
-                };
-            });
+                const cartesian = Cesium.Cartesian3.fromDegrees(lon, lat);
+                const cartesian2 = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
+                if (cartesian2) {
+                    return {
+                        x: cartesian2.x,
+                        y: cartesian2.y,
+                        value: mag
+                    };
+                }
+                return null;
+            }).filter(point => point !== null);
 
-            // Set heatmap data
             heatmapInstance.setData({
                 max: 10,
-                data: heatmapData.map(point => ({
-                    x: point.x,
-                    y: point.y,
-                    value: point.value
-                }))
+                data: heatmapData
             });
-
-            // Generate heatmap image
-            const canvas = heatmapInstance._renderer.canvas;
-            const heatmapImage = canvas.toDataURL();
-
-            // Create SingleTileImageryProvider with heatmap image
-            heatmapLayer = viewer.imageryLayers.addImageryProvider(new Cesium.SingleTileImageryProvider({
-                url: heatmapImage,
-                rectangle: Cesium.Rectangle.fromDegrees(-180.0, -90.0, 180.0, 90.0)
-            }));
-
-            // Adjust layer properties
-            heatmapLayer.alpha = 0.6;
-            heatmapLayer.show = true;
         }
+
+        function removeHeatmap() {
+            heatmapInstance.setData({
+                max: 10,
+                data: []
+            });
+        }
+
+        // Update heatmap on camera move
+        viewer.camera.changed.addEventListener(() => {
+            if (heatmap) {
+                generateHeatmap();
+            }
+        });
 
         document.getElementById('dateRange').oninput = function() {
             document.getElementById('dateRangeValue').innerText = this.value;
