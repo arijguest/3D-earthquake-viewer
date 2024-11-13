@@ -471,7 +471,7 @@ HTML_TEMPLATE = """
             const bar = document.getElementById('earthquakeBar');
             bar.innerHTML = '<div class="bar-item"><strong>Top Earthquakes:</strong></div>';
 
-            top10.forEach(eq => {
+            top10.forEach(eq) => {
                 const mag = eq.properties.mag || 0;
                 const place = eq.properties.place || 'Unknown';
                 const div = document.createElement('div');
@@ -505,7 +505,7 @@ HTML_TEMPLATE = """
         }
 
         function addEarthquakePoints() {
-            earthquakes.forEach(eq => {
+            earthquakes.forEach(eq) => {
                 const [lon, lat, depth] = eq.geometry.coordinates;
                 const mag = eq.properties.mag || 0;
                 const depthKm = depth !== null && depth !== undefined ? depth.toFixed(1) : 'Unknown';
@@ -530,7 +530,7 @@ HTML_TEMPLATE = """
         function generateHeatmap() {
             heatmapInstance.setData({ max: 10, data: [] });
 
-            const heatData = earthquakes.map(eq => {
+            const heatData = earthquakes.map(eq) => {
                 const [lon, lat] = eq.geometry.coordinates;
                 const mag = eq.properties.mag || 0;
                 const cartesian = Cesium.Cartesian3.fromDegrees(lon, lat);
@@ -653,5 +653,3 @@ HTML_TEMPLATE = """
 def index():
     return render_template_string(HTML_TEMPLATE, cesium_token=CESIUM_ION_ACCESS_TOKEN)
 
-if __name__ == '__main__':
-    app.run(debug=True)
