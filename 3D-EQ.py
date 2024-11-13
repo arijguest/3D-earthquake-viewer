@@ -22,7 +22,9 @@ HTML_TEMPLATE = """
     <title>🌍 3D Earthquake Visualization</title>
     <!-- Include CesiumJS -->
     <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
-    <!-- Include CesiumHeatmap -->
+    <!-- Include Heatmap.js -->
+    <script src="https://cdn.jsdelivr.net/npm/heatmapjs@2.0.5/heatmap.min.js"></script>
+    <!-- Include CesiumHeatmap (Custom Implementation) -->
     <script src="https://cdn.jsdelivr.net/gh/ReconNetworks/CesiumHeatmap/CesiumHeatmap.min.js"></script>
     <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
     <style>
@@ -376,6 +378,20 @@ HTML_TEMPLATE = """
         let heatmapLayer;
         let earthquakes = [];
 
+        // Initialize Heatmap.js
+        const heatmapInstance = h337.create({
+            container: document.createElement('div'), // Temporary container
+            radius: 15,
+            maxOpacity: 0.6,
+            minOpacity: 0,
+            blur: 0.85,
+            gradient: {
+                0.0: 'blue',
+                0.5: 'yellow',
+                1.0: 'red'
+            }
+        });
+
         function getColor(magnitude) {
             if (magnitude >= 5.0) return Cesium.Color.fromCssColorString('#d7191c').withAlpha(0.8);
             if (magnitude >= 4.0) return Cesium.Color.fromCssColorString('#fdae61').withAlpha(0.8);
@@ -455,32 +471,40 @@ HTML_TEMPLATE = """
         }
 
         function createHeatmapLayer() {
+            // Prepare data for heatmap.js
             const heatmapData = earthquakes.map(eq => {
                 const [lon, lat] = eq.geometry.coordinates;
                 const mag = eq.properties.mag || 0;
-                return { x: lon, y: lat, value: mag };
+                return {
+                    x: lon,
+                    y: lat,
+                    value: mag
+                };
             });
 
-            const bounds = {
-                west: -180,
-                east: 180,
-                south: -90,
-                north: 90
-            };
-
-            heatmapLayer = viewer.imageryLayers.addImageryProvider(CesiumHeatmap.createHeatmapImageryProvider({
-                bounds: bounds,
-                data: heatmapData,
-                min: 0,
+            // Set heatmap data
+            heatmapInstance.setData({
                 max: 10,
-                gradient: {
-                    0.0: 'blue',
-                    0.5: 'yellow',
-                    1.0: 'red'
-                },
-                radius: 15,
-                blur: 0.85,
+                data: heatmapData.map(point => ({
+                    x: point.x,
+                    y: point.y,
+                    value: point.value
+                }))
+            });
+
+            // Generate heatmap image
+            const canvas = heatmapInstance._renderer.canvas;
+            const heatmapImage = canvas.toDataURL();
+
+            // Create SingleTileImageryProvider with heatmap image
+            heatmapLayer = viewer.imageryLayers.addImageryProvider(new Cesium.SingleTileImageryProvider({
+                url: heatmapImage,
+                rectangle: Cesium.Rectangle.fromDegrees(-180.0, -90.0, 180.0, 90.0)
             }));
+
+            // Adjust layer properties
+            heatmapLayer.alpha = 0.6;
+            heatmapLayer.show = true;
         }
 
         document.getElementById('dateRange').oninput = function() {
@@ -558,7 +582,7 @@ HTML_TEMPLATE = """
         function openModal(earthquakes) {
             const tbody = document.querySelector('#fullEqTable tbody');
             tbody.innerHTML = earthquakes.map(eq => `
-                <tr onclick="flyToEarthquake(${JSON.stringify(eq)})">
+                <tr onclick='flyToEarthquake(${JSON.stringify(eq)})'>
                     <td>${(eq.properties.mag || 0).toFixed(1)}</td>
                     <td>${eq.properties.place || 'Unknown'}</td>
                     <td>${new Date(eq.properties.time).toISOString().slice(0,19)} UTC</td>
