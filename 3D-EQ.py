@@ -3,15 +3,17 @@
 import os
 from flask import Flask, render_template_string
 
+# Define Flask app
 app = Flask(__name__)
 
 # Retrieve the Cesium Ion Access Token from environment variables
 CESIUM_ION_ACCESS_TOKEN = os.environ.get('CESIUM_ION_ACCESS_TOKEN')
 
+# Ensure the Cesium Ion Access Token is available
 if not CESIUM_ION_ACCESS_TOKEN:
     raise ValueError("CESIUM_ION_ACCESS_TOKEN environment variable is not set.")
 
-# HTML template with optimized data handling and slider compatibility
+# HTML template with enhanced data handling and slider compatibility
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -21,7 +23,7 @@ HTML_TEMPLATE = """
     <!-- Include CesiumJS -->
     <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
     <!-- Include Heatmap.js -->
-    <script src="https://cdn.jsdelivr.net/npm/heatmap.js/build/heatmap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/heatmap.js/heatmap.min.js"></script>
     <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
     <style>
         html, body, #cesiumContainer {
@@ -354,9 +356,8 @@ HTML_TEMPLATE = """
             navigationInstructionsInitiallyVisible: false
         });
 
-        // Extend Cesium with navigation controls
-        // Note: Ensure that Cesium Navigation Mixin is included if used
-        // viewer.extend(Cesium.viewerCesiumNavigationMixin, {});
+        // Zoom Controls using Cesium's built-in methods
+        viewer.extend(Cesium.viewerCesiumNavigationMixin, {});
 
         let heatmapEnabled = false;
         let earthquakes = [];
@@ -417,14 +418,14 @@ HTML_TEMPLATE = """
                 case 'Bing Aerial':
                     viewer.baseLayer = viewer.imageryLayers.addImageryProvider(new Cesium.BingMapsImageryProvider({
                         url : 'https://dev.virtualearth.net',
-                        key: '<Your_Bing_Maps_Key>',  // Replace with your Bing Maps API Key
+                        key: '<Your_Bing_Maps_Key>',
                         mapStyle : Cesium.BingMapsStyle.AERIAL
                     }));
                     break;
                 case 'Bing Roads':
                     viewer.baseLayer = viewer.imageryLayers.addImageryProvider(new Cesium.BingMapsImageryProvider({
                         url : 'https://dev.virtualearth.net',
-                        key: '<Your_Bing_Maps_Key>',  // Replace with your Bing Maps API Key
+                        key: '<Your_Bing_Maps_Key>',
                         mapStyle : Cesium.BingMapsStyle.ROAD
                     }));
                     break;
@@ -459,6 +460,9 @@ HTML_TEMPLATE = """
                 }
                 earthquakes = data.features.sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
                 updateEarthquakeData();
+            } catch (error) {
+                console.error('Error fetching earthquake data:', error);
+                alert('Failed to load earthquake data. Please try again later.');
             }
         }
 
@@ -483,12 +487,14 @@ HTML_TEMPLATE = """
             viewAll.onclick = () => openModal(earthquakes);
             bar.appendChild(viewAll);
 
+            // Remove existing entities
             viewer.entities.removeAll();
 
             if (heatmapEnabled) {
                 generateHeatmap();
                 document.getElementById('heatmapContainer').style.display = 'block';
             } else {
+                removeHeatmap();
                 addEarthquakePoints();
                 document.getElementById('heatmapContainer').style.display = 'none';
             }
@@ -522,29 +528,33 @@ HTML_TEMPLATE = """
         }
 
         function generateHeatmap() {
-            const heatmapData = { max: 10, data: [] };
+            heatmapInstance.setData({ max: 10, data: [] });
 
-            earthquakes.forEach(eq => {
+            const heatData = earthquakes.map(eq => {
                 const [lon, lat] = eq.geometry.coordinates;
                 const mag = eq.properties.mag || 0;
-                const position = Cesium.Cartesian3.fromDegrees(lon, lat);
-                const windowPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, position);
-                if (Cesium.defined(windowPosition)) {
-                    heatmapData.data.push({ x: windowPosition.x, y: windowPosition.y, value: mag });
+                const cartesian = Cesium.Cartesian3.fromDegrees(lon, lat);
+                const cartesian2 = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
+                if (cartesian2) {
+                    return { x: cartesian2.x, y: cartesian2.y, value: mag };
                 }
-            });
+                return null;
+            }).filter(point => point !== null);
 
-            heatmapInstance.setData(heatmapData);
+            heatmapInstance.setData({
+                max: 10,
+                data: heatData
+            });
         }
 
-        // Update heatmap on camera move with debounce
-        let heatmapTimeout;
+        function removeHeatmap() {
+            heatmapInstance.setData({ max: 10, data: [] });
+        }
+
+        // Update heatmap on camera move
         viewer.scene.postRender.addEventListener(() => {
             if (heatmapEnabled) {
-                if (heatmapTimeout) clearTimeout(heatmapTimeout);
-                heatmapTimeout = setTimeout(() => {
-                    generateHeatmap();
-                }, 500); // Adjust the delay as needed
+                generateHeatmap();
             }
         });
 
@@ -615,7 +625,7 @@ HTML_TEMPLATE = """
                 tbody.innerHTML = '<tr><td colspan="4">No earthquake data available.</td></tr>';
                 return;
             }
-            tbody.innerHTML = earthquakes.map(eq => {
+            tbody.innerHTML = earthquakes.map(eq) => {
                 const depth = eq.geometry.coordinates[2] !== null && eq.geometry.coordinates[2] !== undefined ? eq.geometry.coordinates[2].toFixed(1) : 'Unknown';
                 return `
                     <tr onclick='flyToEarthquake(${JSON.stringify(eq)})' style="cursor:pointer;">
@@ -634,7 +644,6 @@ HTML_TEMPLATE = """
 
         // Fetch initial earthquake data
         fetchEarthquakes(feedMapping[dateRange.value]);
-
     </script>
 </body>
 </html>
@@ -644,3 +653,5 @@ HTML_TEMPLATE = """
 def index():
     return render_template_string(HTML_TEMPLATE, cesium_token=CESIUM_ION_ACCESS_TOKEN)
 
+if __name__ == '__main__':
+    app.run(debug=True)
