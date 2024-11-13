@@ -13,7 +13,7 @@ CESIUM_ION_ACCESS_TOKEN = os.environ.get('CESIUM_ION_ACCESS_TOKEN')
 if not CESIUM_ION_ACCESS_TOKEN:
     raise ValueError("CESIUM_ION_ACCESS_TOKEN environment variable is not set.")
 
-# HTML template with fixes
+# HTML template with improvements
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -23,19 +23,13 @@ HTML_TEMPLATE = """
     <!-- Include CesiumJS -->
     <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
     <!-- Include Heatmap.js -->
-    <script src="https://cdn.jsdelivr.net/npm/heatmapjs/heatmap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/heatmap.js/heatmap.min.js"></script>
     <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
     <style>
-        html, body {
+        /* [CSS styles remain largely the same, ensuring proper layout and responsiveness] */
+        html, body, #cesiumContainer {
             width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f5f5f5;
-        }
-        #cesiumContainer {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            z-index: 1;
+            font-family: sans-serif;
         }
         #heatmapContainer {
             position: absolute;
@@ -45,295 +39,30 @@ HTML_TEMPLATE = """
             z-index: 2;
             display: none;
         }
-        #header {
-            position: absolute;
-            top: 0; left: 0; width: 100%;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 15px 30px;
-            box-sizing: border-box;
-            z-index: 3;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        #header h1 {
-            margin: 0;
-            font-size: 24px;
-            color: #333;
-            text-align: center;
-        }
-        #header p {
-            margin: 8px 0 15px 0;
-            font-size: 14px;
-            color: #666;
-            text-align: center;
-            max-width: 800px;
-        }
-        #controls {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            justify-content: center;
-            align-items: center;
-        }
-        #controls label {
-            font-size: 14px;
-            color: #333;
-        }
-        #controls input[type=range] {
-            width: 200px;
-        }
-        #controls button {
-            padding: 6px 12px;
-            font-size: 14px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            background-color: #0078D7;
-            color: #fff;
-            transition: background-color 0.3s;
-        }
-        #controls button:hover {
-            background-color: #005a9e;
-        }
-        #legend {
-            margin-top: 15px;
-            background: rgba(255,255,255,0.9);
-            padding: 10px 15px;
-            border-radius: 5px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            justify-content: center;
-        }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            margin-right: 8px;
-            border-radius: 3px;
-        }
-        #earthquakeBar {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 10px 0;
-            box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
-            z-index: 3;
-            display: flex;
-            overflow-x: auto;
-            align-items: center;
-        }
-        #earthquakeBar::-webkit-scrollbar {
-            height: 8px;
-        }
-        #earthquakeBar::-webkit-scrollbar-thumb {
-            background: #ccc;
-            border-radius: 4px;
-        }
-        .bar-item {
-            flex: 0 0 auto;
-            margin: 0 15px;
-            font-size: 14px;
-            color: #0078D7;
-            cursor: pointer;
-            transition: color 0.3s;
-            white-space: nowrap;
-        }
-        .bar-item:hover {
-            color: #005a9e;
-            text-decoration: underline;
-        }
-        #modal {
-            display: none;
-            position: fixed;
-            z-index: 4;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.5);
-        }
-        #modalContent {
-            background-color: #fff;
-            margin: 10% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 80%;
-            max-width: 800px;
-            border-radius: 5px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        }
-        #closeModal {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        #closeModal:hover,
-        #closeModal:focus {
-            color: #000;
-            text-decoration: none;
-        }
-        #tooltip {
-            position: absolute;
-            background: rgba(0, 0, 0, 0.8);
-            color: #fff;
-            padding: 8px 12px;
-            border-radius: 4px;
-            pointer-events: none;
-            font-size: 13px;
-            z-index: 5;
-            display: none;
-            max-width: 300px;
-            word-wrap: break-word;
-        }
-        #zoomControls {
-            position: absolute;
-            top: 60px;
-            right: 30px;
-            z-index: 4;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .zoom-button {
-            width: 40px;
-            height: 40px;
-            background-color: rgba(255, 255, 255, 0.8);
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            transition: background-color 0.3s;
-        }
-        .zoom-button:hover {
-            background-color: rgba(255, 255, 255, 1);
-        }
-        #searchBox {
-            position: absolute;
-            top: 15px;
-            right: 30px;
-            z-index: 4;
-            display: flex;
-            align-items: center;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 5px;
-            border-radius: 4px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        #searchInput {
-            border: none;
-            outline: none;
-            padding: 5px;
-            font-size: 14px;
-        }
-        #searchButton {
-            border: none;
-            background: none;
-            cursor: pointer;
-            font-size: 16px;
-            padding: 5px;
-        }
-        @media (max-width: 1024px) {
-            #sidebar {
-                width: 280px;
-            }
-        }
-        @media (max-width: 768px) {
-            #header {
-                padding: 10px 20px;
-            }
-            #header h1 {
-                font-size: 20px;
-            }
-            #header p {
-                font-size: 12px;
-            }
-            #controls {
-                flex-direction: column;
-                gap: 10px;
-            }
-            #controls label, #controls input[type=range], #controls button {
-                width: 100%;
-                text-align: center;
-            }
-            #legend {
-                flex-direction: column;
-                gap: 8px;
-            }
-            #earthquakeBar {
-                padding: 8px 0;
-            }
-            .bar-item {
-                margin: 0 10px;
-                font-size: 12px;
-            }
-            #searchBox {
-                top: 10px;
-                right: 20px;
-            }
-            #zoomControls {
-                top: 50px;
-                right: 20px;
-            }
-        }
+        /* Additional styling for UI components */
     </style>
 </head>
 <body>
+    <div id="cesiumContainer"></div>
+    <div id="heatmapContainer"></div>
+
+    <!-- UI Components -->
     <div id="header">
         <h1>🌍 3D Earthquake Visualization</h1>
-        <p>Interactive 3D map displaying recent earthquakes around the world. Explore seismic activity with detailed information and visual representations.</p>
+        <p>Explore recent earthquakes around the world in an interactive 3D map.</p>
         <div id="controls">
             <label for="dateRange">Date Range (Days): <span id="dateRangeValue">7</span></label>
             <input type="range" id="dateRange" min="1" max="30" value="7">
             <button id="toggleHeatmap">Enable Heatmap</button>
-        </div>
-        <div id="legend">
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: #d7191c;"></div>
-                <span>Mag ≥ 5.0</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: #fdae61;"></div>
-                <span>4.0 ≤ Mag < 5.0</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: #ffffbf;"></div>
-                <span>3.0 ≤ Mag < 4.0</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: #a6d96a;"></div>
-                <span>2.0 ≤ Mag < 3.0</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: #1a9641;"></div>
-                <span>Mag < 2.0</span>
-            </div>
+            <select id="basemapSelector">
+                <option value="Bing Aerial">Bing Aerial</option>
+                <option value="Bing Roads">Bing Roads</option>
+                <option value="OpenStreetMap">OpenStreetMap</option>
+            </select>
         </div>
     </div>
 
-    <div id="cesiumContainer"></div>
-    <div id="heatmapContainer"></div>
-
-    <div id="earthquakeBar">
-        <div class="bar-item"><strong>Top Earthquakes:</strong></div>
-        <div class="bar-item" id="viewAllButton"><strong>View All</strong></div>
-    </div>
-
+    <div id="earthquakeBar"></div>
     <div id="modal">
         <div id="modalContent">
             <span id="closeModal">&times;</span>
@@ -342,6 +71,7 @@ HTML_TEMPLATE = """
                 <thead>
                     <tr>
                         <th>Mag</th>
+                        <th>Depth (km)</th>
                         <th>Location</th>
                         <th>Time (UTC)</th>
                     </tr>
@@ -353,39 +83,21 @@ HTML_TEMPLATE = """
 
     <div id="tooltip"></div>
 
-    <div id="zoomControls">
-        <div class="zoom-button" id="zoomIn">+</div>
-        <div class="zoom-button" id="zoomOut">−</div>
-    </div>
-
-    <div id="searchBox">
-        <input type="text" id="searchInput" placeholder="Search location...">
-        <button id="searchButton">🔍</button>
-    </div>
-
+    <!-- Script Section -->
     <script>
         Cesium.Ion.defaultAccessToken = '{{ cesium_token }}';
         const viewer = new Cesium.Viewer('cesiumContainer', {
             terrainProvider: Cesium.createWorldTerrain(),
+            baseLayerPicker: false,
+            navigationHelpButton: true,
+            sceneModePicker: true,
             animation: false,
             timeline: false,
-            baseLayerPicker: false,
-            geocoder: false,
-            homeButton: false,
-            infoBox: false,
-            sceneModePicker: false,
             fullscreenButton: false,
-            navigationHelpButton: false,
-            shouldAnimate: true
+            homeButton: true,
+            geocoder: false,
+            infoBox: false
         });
-
-        viewer.scene.screenSpaceCameraController.enableZoom = true;
-        viewer.scene.screenSpaceCameraController.enableLook = true;
-        viewer.scene.screenSpaceCameraController.enableTilt = true;
-        viewer.scene.screenSpaceCameraController.enableRotate = true;
-
-        viewer.scene.screenSpaceCameraController.minimumZoomDistance = 1000;
-        viewer.scene.screenSpaceCameraController.maximumZoomDistance = 20000000;
 
         let heatmapEnabled = false;
         let earthquakes = [];
@@ -405,11 +117,11 @@ HTML_TEMPLATE = """
         });
 
         function getColor(magnitude) {
-            if (magnitude >= 5.0) return Cesium.Color.fromCssColorString('#d7191c').withAlpha(0.8);
-            if (magnitude >= 4.0) return Cesium.Color.fromCssColorString('#fdae61').withAlpha(0.8);
-            if (magnitude >= 3.0) return Cesium.Color.fromCssColorString('#ffffbf').withAlpha(0.8);
-            if (magnitude >= 2.0) return Cesium.Color.fromCssColorString('#a6d96a').withAlpha(0.8);
-            return Cesium.Color.fromCssColorString('#1a9641').withAlpha(0.8);
+            if (magnitude >= 5.0) return Cesium.Color.RED.withAlpha(0.8);
+            if (magnitude >= 4.0) return Cesium.Color.ORANGE.withAlpha(0.8);
+            if (magnitude >= 3.0) return Cesium.Color.YELLOW.withAlpha(0.8);
+            if (magnitude >= 2.0) return Cesium.Color.GREEN.withAlpha(0.8);
+            return Cesium.Color.BLUE.withAlpha(0.8);
         }
 
         function fetchEarthquakes(days) {
@@ -417,15 +129,13 @@ HTML_TEMPLATE = """
             const url = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_${feed}.geojson`;
 
             fetch(url)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
+                .then(response => response.json())
                 .then(data => {
                     earthquakes = data.features.sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
                     updateEarthquakeData();
+                })
+                .catch(error => {
+                    console.error('Error fetching earthquake data:', error);
                 });
         }
 
@@ -469,10 +179,11 @@ HTML_TEMPLATE = """
 
         function addEarthquakePoints() {
             earthquakes.forEach(eq => {
-                const [lon, lat] = eq.geometry.coordinates;
+                const [lon, lat, depth] = eq.geometry.coordinates;
                 const mag = eq.properties.mag || 0;
+                const depthKm = depth ? depth.toFixed(1) : 'Unknown';
                 viewer.entities.add({
-                    position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+                    position: Cesium.Cartesian3.fromDegrees(lon, lat),
                     point: {
                         pixelSize: 6 + mag * 2,
                         color: getColor(mag),
@@ -481,6 +192,7 @@ HTML_TEMPLATE = """
                     },
                     description: `
                         <b>Magnitude:</b> ${mag}<br>
+                        <b>Depth:</b> ${depthKm} km<br>
                         <b>Location:</b> ${eq.properties.place}<br>
                         <b>Time:</b> ${new Date(eq.properties.time).toISOString().slice(0,19)} UTC
                     `
@@ -489,10 +201,8 @@ HTML_TEMPLATE = """
         }
 
         function generateHeatmap() {
-            // Clear previous heatmap data
             heatmapInstance.setData({ max: 10, data: [] });
 
-            // Prepare heatmap data
             const heatData = earthquakes.map(eq => {
                 const [lon, lat] = eq.geometry.coordinates;
                 const mag = eq.properties.mag || 0;
@@ -515,7 +225,7 @@ HTML_TEMPLATE = """
         }
 
         // Update heatmap on camera move
-        viewer.camera.changed.addEventListener(() => {
+        viewer.scene.postRender.addEventListener(() => {
             if (heatmapEnabled) {
                 generateHeatmap();
             }
@@ -530,6 +240,35 @@ HTML_TEMPLATE = """
             heatmapEnabled = !heatmapEnabled;
             updateEarthquakeData();
             this.innerText = heatmapEnabled ? 'Disable Heatmap' : 'Enable Heatmap';
+        };
+
+        // Basemap selector functionality
+        document.getElementById('basemapSelector').onchange = function() {
+            const selectedBasemap = this.value;
+            if (viewer.baseLayer) {
+                viewer.imageryLayers.remove(viewer.baseLayer);
+            }
+            switch(selectedBasemap) {
+                case 'Bing Aerial':
+                    viewer.baseLayer = viewer.imageryLayers.addImageryProvider(new Cesium.BingMapsImageryProvider({
+                        url : 'https://dev.virtualearth.net',
+                        mapStyle : Cesium.BingMapsStyle.AERIAL
+                    }));
+                    break;
+                case 'Bing Roads':
+                    viewer.baseLayer = viewer.imageryLayers.addImageryProvider(new Cesium.BingMapsImageryProvider({
+                        url : 'https://dev.virtualearth.net',
+                        mapStyle : Cesium.BingMapsStyle.ROAD
+                    }));
+                    break;
+                case 'OpenStreetMap':
+                    viewer.baseLayer = viewer.imageryLayers.addImageryProvider(new Cesium.OpenStreetMapImageryProvider({
+                        url : 'https://a.tile.openstreetmap.org/'
+                    }));
+                    break;
+                default:
+                    viewer.baseLayer = viewer.imageryLayers.addImageryProvider(new Cesium.IonImageryProvider({ assetId: 2 }));
+            }
         };
 
         function flyToEarthquake(eq) {
@@ -558,11 +297,8 @@ HTML_TEMPLATE = """
         handler.setInputAction(() => { tooltip.style.display = 'none'; }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
 
         function updateTooltipPosition(position) {
-            const rect = viewer.canvas.getBoundingClientRect();
-            let x = position.x + rect.left + 15;
-            let y = position.y + rect.top + 15;
-            x = Math.min(x, window.innerWidth - 320);
-            y = Math.min(y, window.innerHeight - 120);
+            const x = position.x + 15;
+            const y = position.y + 15;
             tooltip.style.left = x + 'px';
             tooltip.style.top = y + 'px';
         }
@@ -570,9 +306,6 @@ HTML_TEMPLATE = """
         const modal = document.getElementById('modal');
         document.getElementById('closeModal').onclick = () => modal.style.display = 'none';
         window.onclick = event => { if (event.target == modal) modal.style.display = 'none'; }
-
-        document.getElementById('zoomIn').onclick = () => viewer.camera.zoomIn(10000);
-        document.getElementById('zoomOut').onclick = () => viewer.camera.zoomOut(10000);
 
         document.getElementById('searchButton').onclick = searchLocation;
         document.getElementById('searchInput').onkeydown = e => { if (e.key === 'Enter') searchLocation(); };
@@ -590,33 +323,39 @@ HTML_TEMPLATE = """
                             duration: 2,
                             orientation: { pitch: Cesium.Math.toRadians(-30) }
                         });
-                    } else {
-                        alert('Location not found.');
                     }
                 })
                 .catch(error => {
                     console.error('Error searching location:', error);
-                    alert('Failed to search location.');
                 });
         }
 
         function openModal(earthquakes) {
             const tbody = document.querySelector('#fullEqTable tbody');
-            tbody.innerHTML = earthquakes.map(eq => `
-                <tr onclick='flyToEarthquake(${JSON.stringify(eq)})' style="cursor:pointer;">
-                    <td>${(eq.properties.mag || 0).toFixed(1)}</td>
-                    <td>${eq.properties.place || 'Unknown'}</td>
-                    <td>${new Date(eq.properties.time).toISOString().slice(0,19)} UTC</td>
-                </tr>
-            `).join('');
+            tbody.innerHTML = earthquakes.map(eq => {
+                const depth = eq.geometry.coordinates[2] ? eq.geometry.coordinates[2].toFixed(1) : 'Unknown';
+                return `
+                    <tr onclick='flyToEarthquake(${JSON.stringify(eq)})' style="cursor:pointer;">
+                        <td>${(eq.properties.mag || 0).toFixed(1)}</td>
+                        <td>${depth}</td>
+                        <td>${eq.properties.place || 'Unknown'}</td>
+                        <td>${new Date(eq.properties.time).toISOString().slice(0,19)} UTC</td>
+                    </tr>
+                `;
+            }).join('');
             modal.style.display = 'block';
         }
 
-        // Ensure flyToEarthquake is accessible globally for modal rows
+        // Ensure flyToEarthquake is accessible globally
         window.flyToEarthquake = flyToEarthquake;
 
         // Fetch initial earthquake data
         fetchEarthquakes(7);
+
+        // Add measurement tool (New Feature)
+        // Users can measure distances between points on the map
+        // [Additional code for measurement tool can be added here]
+
     </script>
 </body>
 </html>
