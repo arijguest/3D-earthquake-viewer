@@ -26,10 +26,16 @@ HTML_TEMPLATE = """
     <script src="https://cdn.jsdelivr.net/npm/heatmapjs@2.0.5/heatmap.min.js"></script>
     <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
     <style>
-        html, body, #cesiumContainer {
+        html, body, #cesiumContainer, #heatmapContainer {
             width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f5f5f5;
+        }
+        #heatmapContainer {
+            position: absolute;
+            top: 0; left: 0;
+            pointer-events: none;
+            z-index: 3;
         }
         #header {
             position: absolute;
@@ -141,7 +147,7 @@ HTML_TEMPLATE = """
         #modal {
             display: none;
             position: fixed;
-            z-index: 3;
+            z-index: 4;
             left: 0;
             top: 0;
             width: 100%;
@@ -234,16 +240,6 @@ HTML_TEMPLATE = """
             font-size: 16px;
             padding: 5px;
         }
-        #heatmapContainer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 3;
-            display: none;
-        }
         @media (max-width: 1024px) {
             #sidebar {
                 width: 280px;
@@ -285,9 +281,6 @@ HTML_TEMPLATE = """
             #zoomControls {
                 top: 50px;
                 right: 20px;
-            }
-            #heatmapContainer {
-                display: none;
             }
         }
     </style>
@@ -386,13 +379,12 @@ HTML_TEMPLATE = """
         viewer.scene.screenSpaceCameraController.minimumZoomDistance = 1000;
         viewer.scene.screenSpaceCameraController.maximumZoomDistance = 20000000;
 
-        let heatmap = false;
+        let heatmapEnabled = false;
         let earthquakes = [];
 
         // Initialize Heatmap.js
-        const heatmapContainer = document.getElementById('heatmapContainer');
         const heatmapInstance = h337.create({
-            container: heatmapContainer,
+            container: document.getElementById('heatmapContainer'),
             radius: 15,
             maxOpacity: 0.6,
             minOpacity: 0,
@@ -417,12 +409,20 @@ HTML_TEMPLATE = """
             const url = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_${feed}.geojson`;
 
             fetch(url)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     earthquakes = data.features.sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
                     updateEarthquakeData();
                 })
-                .catch(console.error);
+                .catch(error => {
+                    console.error('Error fetching earthquake data:', error);
+                    alert('Failed to load earthquake data.');
+                });
         }
 
         function updateEarthquakeData() {
@@ -449,14 +449,13 @@ HTML_TEMPLATE = """
             // Remove existing entities
             viewer.entities.removeAll();
 
-            if (heatmap) {
+            if (heatmapEnabled) {
                 generateHeatmap();
-                heatmapContainer.style.display = 'block';
-                // Hide earthquake points when heatmap is enabled
+                document.getElementById('heatmapContainer').style.display = 'block';
             } else {
                 removeHeatmap();
                 addEarthquakePoints();
-                heatmapContainer.style.display = 'none';
+                document.getElementById('heatmapContainer').style.display = 'none';
             }
 
             viewer.zoomTo(viewer.entities);
@@ -485,43 +484,33 @@ HTML_TEMPLATE = """
 
         function generateHeatmap() {
             // Clear previous heatmap data
-            heatmapInstance.setData({
-                max: 10,
-                data: []
-            });
+            heatmapInstance.setData({ max: 10, data: [] });
 
             // Prepare heatmap data
-            const heatmapData = earthquakes.map(eq => {
+            const heatData = earthquakes.map(eq => {
                 const [lon, lat] = eq.geometry.coordinates;
                 const mag = eq.properties.mag || 0;
                 const cartesian = Cesium.Cartesian3.fromDegrees(lon, lat);
                 const cartesian2 = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cartesian);
                 if (cartesian2) {
-                    return {
-                        x: cartesian2.x,
-                        y: cartesian2.y,
-                        value: mag
-                    };
+                    return { x: cartesian2.x, y: cartesian2.y, value: mag };
                 }
                 return null;
             }).filter(point => point !== null);
 
             heatmapInstance.setData({
                 max: 10,
-                data: heatmapData
+                data: heatData
             });
         }
 
         function removeHeatmap() {
-            heatmapInstance.setData({
-                max: 10,
-                data: []
-            });
+            heatmapInstance.setData({ max: 10, data: [] });
         }
 
         // Update heatmap on camera move
         viewer.camera.changed.addEventListener(() => {
-            if (heatmap) {
+            if (heatmapEnabled) {
                 generateHeatmap();
             }
         });
@@ -532,9 +521,9 @@ HTML_TEMPLATE = """
         };
 
         document.getElementById('toggleHeatmap').onclick = function() {
-            heatmap = !heatmap;
+            heatmapEnabled = !heatmapEnabled;
             updateEarthquakeData();
-            this.innerText = heatmap ? 'Disable Heatmap' : 'Enable Heatmap';
+            this.innerText = heatmapEnabled ? 'Disable Heatmap' : 'Enable Heatmap';
         };
 
         function flyToEarthquake(eq) {
@@ -554,19 +543,23 @@ HTML_TEMPLATE = """
             if (Cesium.defined(picked) && picked.id && picked.id.description) {
                 tooltip.style.display = 'block';
                 tooltip.innerHTML = picked.id.description.getValue();
-                const rect = viewer.canvas.getBoundingClientRect();
-                let x = movement.endPosition.x + rect.left + 15;
-                let y = movement.endPosition.y + rect.top + 15;
-                x = Math.min(x, window.innerWidth - 320);
-                y = Math.min(y, window.innerHeight - 120);
-                tooltip.style.left = x + 'px';
-                tooltip.style.top = y + 'px';
+                updateTooltipPosition(movement.endPosition);
             } else {
                 tooltip.style.display = 'none';
             }
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
         handler.setInputAction(() => { tooltip.style.display = 'none'; }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+
+        function updateTooltipPosition(position) {
+            const rect = viewer.canvas.getBoundingClientRect();
+            let x = position.x + rect.left + 15;
+            let y = position.y + rect.top + 15;
+            x = Math.min(x, window.innerWidth - 320);
+            y = Math.min(y, window.innerHeight - 120);
+            tooltip.style.left = x + 'px';
+            tooltip.style.top = y + 'px';
+        }
 
         const modal = document.getElementById('modal');
         document.getElementById('closeModal').onclick = () => modal.style.display = 'none';
@@ -595,7 +588,10 @@ HTML_TEMPLATE = """
                         alert('Location not found.');
                     }
                 })
-                .catch(console.error);
+                .catch(error => {
+                    console.error('Error searching location:', error);
+                    alert('Failed to search location.');
+                });
         }
 
         function openModal(earthquakes) {
@@ -609,6 +605,9 @@ HTML_TEMPLATE = """
             `).join('');
             modal.style.display = 'block';
         }
+
+        // Ensure flyToEarthquake is accessible globally for modal rows
+        window.flyToEarthquake = flyToEarthquake;
 
         // Fetch initial earthquake data
         fetchEarthquakes(7);
