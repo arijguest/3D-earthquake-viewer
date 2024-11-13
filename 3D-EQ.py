@@ -13,7 +13,7 @@ CESIUM_ION_ACCESS_TOKEN = os.environ.get('CESIUM_ION_ACCESS_TOKEN')
 if not CESIUM_ION_ACCESS_TOKEN:
     raise ValueError("CESIUM_ION_ACCESS_TOKEN environment variable is not set.")
 
-# HTML template with enhancements
+# HTML template with fixes
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -26,16 +26,24 @@ HTML_TEMPLATE = """
     <script src="https://cdn.jsdelivr.net/npm/heatmapjs@2.0.5/heatmap.min.js"></script>
     <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
     <style>
-        html, body, #cesiumContainer, #heatmapContainer {
+        html, body {
             width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f5f5f5;
         }
+        #cesiumContainer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+        }
         #heatmapContainer {
             position: absolute;
             top: 0; left: 0;
+            width: 100%; height: 100%;
             pointer-events: none;
-            z-index: 3;
+            z-index: 2;
+            display: none;
         }
         #header {
             position: absolute;
@@ -43,7 +51,7 @@ HTML_TEMPLATE = """
             background: rgba(255, 255, 255, 0.95);
             padding: 15px 30px;
             box-sizing: border-box;
-            z-index: 2;
+            z-index: 3;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -119,7 +127,7 @@ HTML_TEMPLATE = """
             background: rgba(255, 255, 255, 0.95);
             padding: 10px 0;
             box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
-            z-index: 2;
+            z-index: 3;
             display: flex;
             overflow-x: auto;
             align-items: center;
@@ -458,7 +466,9 @@ HTML_TEMPLATE = """
                 document.getElementById('heatmapContainer').style.display = 'none';
             }
 
-            viewer.zoomTo(viewer.entities);
+            viewer.zoomTo(viewer.entities).otherwise(() => {
+                console.log('Zoom failed');
+            });
         }
 
         function addEarthquakePoints() {
@@ -597,7 +607,7 @@ HTML_TEMPLATE = """
         function openModal(earthquakes) {
             const tbody = document.querySelector('#fullEqTable tbody');
             tbody.innerHTML = earthquakes.map(eq => `
-                <tr onclick='flyToEarthquake(${JSON.stringify(eq)})'>
+                <tr onclick='flyToEarthquake(${JSON.stringify(eq)})' style="cursor:pointer;">
                     <td>${(eq.properties.mag || 0).toFixed(1)}</td>
                     <td>${eq.properties.place || 'Unknown'}</td>
                     <td>${new Date(eq.properties.time).toISOString().slice(0,19)} UTC</td>
@@ -619,3 +629,6 @@ HTML_TEMPLATE = """
 @app.route('/')
 def index():
     return render_template_string(HTML_TEMPLATE, cesium_token=CESIUM_ION_ACCESS_TOKEN)
+
+if __name__ == '__main__':
+    app.run(debug=True)
