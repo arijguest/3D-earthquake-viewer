@@ -21,7 +21,7 @@ HTML_TEMPLATE = """
     <!-- Include CesiumJS -->
     <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
     <!-- Include Heatmap.js -->
-    <script src="https://cdn.jsdelivr.net/npm/heatmap.js@2.0.5/build/heatmap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/heatmap.js/build/heatmap.min.js"></script>
     <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
     <style>
         html, body, #cesiumContainer {
@@ -459,9 +459,6 @@ HTML_TEMPLATE = """
                 }
                 earthquakes = data.features.sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
                 updateEarthquakeData();
-            } catch (error) {
-                console.error('Error fetching earthquake data:', error);
-                alert('Failed to load earthquake data. Please try again later.');
             }
         }
 
