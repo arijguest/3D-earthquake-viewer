@@ -405,10 +405,6 @@ HTML_TEMPLATE = """
                     }
                     earthquakes = data.features.sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
                     updateEarthquakeData();
-                })
-                .catch(error => {
-                    console.error('Error fetching earthquake data:', error);
-                    alert('Failed to load earthquake data. Please try again later.');
                 });
         }
 
